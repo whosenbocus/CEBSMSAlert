@@ -17,7 +17,7 @@ namespace CEBAlert
     public static class AlertPerHour
     {
         [FunctionName("AlertPerHour")]
-        public static void Run([TimerTrigger(" 0 0 * * *")]TimerInfo myTimer, ILogger log)
+        public static void Run([TimerTrigger(" 0 */6 * * *")]TimerInfo myTimer, ILogger log)
         {
             try
             {
