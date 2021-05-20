@@ -3,7 +3,7 @@ Azure Function App that scrapes CEB outage website and send SMS via Twilio in sp
 
 A shorten version of the URL of the outage page will be included in the SMS.
 
-The CRON Schedule is set to run once per day at 0 hour
+The CRON Schedule is set to run four times per day
 
 # Requirement
 1. Create a Twilio Account and register a sender number
