@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Threading.Tasks;
+using CEBAlert.Model;
 using HtmlAgilityPack;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
@@ -11,22 +13,22 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Twilio;
 using Twilio.Rest.Api.V2010.Account;
+using Microsoft.Extensions.Configuration;
 
 namespace CEBAlert
 {
     public static class AlertPerHour
     {
         [FunctionName("AlertPerHour")]
-        public static void Run([TimerTrigger(" 0 */6 * * *")]TimerInfo myTimer, ILogger log)
+        public static async Task Run([TimerTrigger("0 0 * * * *")] TimerInfo myTimer,
+            [CosmosDB(databaseName: "Alert", collectionName: "Alert", ConnectionStringSetting = "CosmosDBConnectionStringSetting")] IAsyncCollector<Alert> documentOut,
+            [CosmosDB(databaseName: "Alert", collectionName: "Alert", ConnectionStringSetting = "CosmosDBConnectionStringSetting", SqlQuery = "select * from c")] IEnumerable<Alert> alerts,
+            ILogger log)
         {
             try
             {
                 string CEBURL = "https://ceb.mu/customer-corner/power-outage-information";
-                string[] AlertingTown = new string[]
-                {
-                "magnien",
-                "hill"
-                };
+                string[] AlertingTown = Environment.GetEnvironmentVariable("LocalityCSV").Split(',');
                 StringBuilder SMSMessage = new StringBuilder();
                 List<string> Districts = new List<string>();
                 HttpClient httpClient = new HttpClient();
@@ -40,6 +42,14 @@ namespace CEBAlert
                 dynamic value = JsonConvert.DeserializeObject<dynamic>(website);
                 Districts.Add(value.grandport.ToString());
                 Districts.Add(value.plainewilhems.ToString());
+                Districts.Add(value.blackriver.ToString());
+                Districts.Add(value.flacq.ToString());
+                Districts.Add(value.moka.ToString());
+                Districts.Add(value.pamplemousses.ToString());
+                Districts.Add(value.portlouis.ToString());
+                Districts.Add(value.rivieredurempart.ToString());
+                Districts.Add(value.savanne.ToString());
+                Districts.Add(value.rodrigues.ToString());
 
                 foreach (string district in Districts)
                 {
@@ -52,14 +62,24 @@ namespace CEBAlert
                         string LocalityDetails = record.Descendants("td").ElementAt(2).InnerText;
                         if (AlertingTown.Any(x => Locality.ToLower().Contains(x)))
                         {
-                            SMSMessage.AppendLine($"{Locality} on {OutageTime} ");
+                            if (!alerts.Where(x => x.OutageTime == OutageTime && x.Locality == Locality && x.LocalityDetails == LocalityDetails).Any())
+                            {
+                                await documentOut.AddAsync(new Alert()
+                                {
+                                    OutageTime = OutageTime,
+                                    Locality = Locality,
+                                    LocalityDetails = LocalityDetails
+                                });
+
+                                SMSMessage.AppendLine($"{Locality} on {OutageTime} ");
+                            }
                         }
 
                     }
                 }
-
                 if (SMSMessage.Length != 0)
                 {
+                    log.LogInformation($"SMS Content: {SMSMessage.ToString()}");
                     SMSMessage.AppendLine($"URL: https://tinyurl.com/yy37htvx");
                     string SMS = SMSMessage.ToString();
                     string accountSid = Environment.GetEnvironmentVariable("TwilioaccountSid");
